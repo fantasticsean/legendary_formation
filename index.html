@@ -1,0 +1,325 @@
+<script>
+(function(){
+  const qs = s=>document.querySelector(s);
+  const qsa = s=>Array.from(document.querySelectorAll(s));
+
+  // ===== 추가: 효과음 준비 =====
+  const sounds = {
+    hit: new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"), // 맞췄을 때
+    miss: new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"), // 놓쳤을 때
+    round: new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"), // 라운드 클리어
+    over: new Audio("https://actions.google.com/sounds/v1/cartoon/metal_thud_and_clang.ogg") // 게임 오버
+  };
+  // 반복 재생 방지
+  Object.values(sounds).forEach(s=>{
+    s.preload="auto";
+    s.volume = 0.6;
+  });
+
+  // ===== 기존 변수 및 함수 그대로 유지 =====
+  const $setup = qs('#screen-setup');
+  const $hud = qs('#screen-hud');
+  const $result = qs('#screen-result');
+  const $grid = qs('#grid');
+  const $team = qs('#hud-team');
+  const $round = qs('#hud-round');
+  const $score = qs('#hud-score');
+  const $time = qs('#hud-time');
+  const $lives = qs('#hud-lives');
+  const $badge = document.querySelector('.badge');
+  const $resTeam = qs('#res-team');
+  const $resRounds = qs('#res-rounds');
+  const $resScore = qs('#res-score');
+  const $resBest = qs('#res-best');
+  const $recordsList = qs('#records-list');
+  const toast = qs('#toast');
+
+  const LS_KEY = 'nmtm_records_v1';
+
+  const TEAM = {
+    shinhan: {name:'신한카드', color:'#2266ff', bg:'#0b1a44'},
+    hyundai: {name:'현대커머셜', color:'#800020', bg:'#2a0c14'}
+  };
+
+  let state = {
+    teamKey:null,
+    teamName:'-',
+    round:1,
+    score:0,
+    timeLeft:10.0,
+    lives:3,
+    playing:false,
+    paused:false,
+    timers:{spawn:null, tick:null},
+    upTimeouts:new Set(),
+    missThisRound:0,
+  };
+
+  function buildGrid(){
+    $grid.innerHTML='';
+    for(let i=0;i<9;i++){
+      const hole = document.createElement('div');
+      hole.className='hole';
+      const mole = document.createElement('div');
+      mole.className='mole';
+      mole.innerHTML = `
+        <div class="body">
+          <div class="card"><span>The&nbsp;More</span></div>
+        </div>`;
+      mole.addEventListener('pointerdown', e=>{
+        if(!state.playing || state.paused) return;
+        if(mole.dataset.hit==='1') return;
+        mole.dataset.hit='1';
+        state.score++;
+        $score.textContent=state.score;
+        // ===== 추가: 효과음 & 진동 =====
+        sounds.hit.currentTime=0;
+        sounds.hit.play();
+        navigator.vibrate && navigator.vibrate(50);
+        mole.classList.remove('up');
+        clearTimeout(mole._dropTimer);
+        mole._wasHit = true;
+      }, {passive:true});
+      hole.appendChild(mole);
+      $grid.appendChild(hole);
+    }
+  }
+  buildGrid();
+
+  qsa('.team').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const key = btn.dataset.team;
+      selectTeam(key);
+      startGame();
+    });
+  });
+
+  function selectTeam(key){
+    const t = TEAM[key];
+    state.teamKey = key;
+    state.teamName = t.name;
+    document.documentElement.style.setProperty('--team', t.color);
+    $badge.style.background = t.color;
+    $badge.style.boxShadow = `0 0 14px ${t.color}`;
+  }
+
+  function resetRoundUI(){
+    $lives.innerHTML='';
+    for(let i=0;i<3;i++){
+      const h=document.createElement('i');
+      h.className='heart';
+      h.style.position='relative';
+      $lives.appendChild(h);
+    }
+  }
+
+  function setScreen(id){
+    $setup.style.display = (id==='setup')?'block':'none';
+    $hud.style.display   = (id==='hud')?'block':'none';
+    $result.style.display= (id==='result')?'block':'none';
+  }
+
+  function startGame(){
+    state.round=1;
+    state.score=0;
+    state.playing=true;
+    state.paused=false;
+    beginRound(true);
+    setScreen('hud');
+  }
+
+  function difficulty(r){
+    const baseUp = 900;
+    const baseSpawn = 650;
+    const up = Math.max(350, Math.round(baseUp * Math.pow(0.93, r-1)));
+    const spawn = Math.max(260, Math.round(baseSpawn * Math.pow(0.94, r-1)));
+    return {up, spawn};
+  }
+
+  function beginRound(){
+    state.timeLeft = 10.0;
+    state.lives = 3;
+    $team.textContent = state.teamName;
+    $round.textContent = state.round;
+    $score.textContent = state.score;
+    $time.textContent = state.timeLeft.toFixed(1);
+    resetRoundUI();
+    qsa('.mole').forEach(m=>{
+      m.classList.remove('up');
+      m.dataset.hit='0';
+      m._wasHit=false;
+    });
+    clearTimers();
+    const {up, spawn} = difficulty(state.round);
+    state.timers.tick = setInterval(()=>{
+      if(state.paused) return;
+      state.timeLeft = Math.max(0, +(state.timeLeft - 0.1).toFixed(1));
+      $time.textContent = state.timeLeft.toFixed(1);
+      if(state.timeLeft<=0){
+        nextRound();
+      }
+    }, 100);
+
+    state.timers.spawn = setInterval(()=>{
+      if(state.paused) return;
+      popRandomMole(up);
+    }, spawn);
+  }
+
+  function popRandomMole(upTime){
+    const holes = qsa('.hole');
+    const hole = holes[Math.floor(Math.random()*holes.length)];
+    const m = hole.querySelector('.mole');
+    if(m.classList.contains('up')) return;
+    m.dataset.hit='0';
+    m._wasHit=false;
+    m.classList.add('up');
+    m._dropTimer = setTimeout(()=>{
+      m.classList.remove('up');
+      if(!m._wasHit){
+        registerMiss();
+      }
+    }, upTime);
+    state.upTimeouts.add(m._dropTimer);
+  }
+
+  function registerMiss(){
+    const idx = 3 - state.lives;
+    const heart = $lives.children[idx];
+    if(heart) heart.classList.add('off');
+    state.lives--;
+    // ===== 추가: 효과음 & 진동 =====
+    sounds.miss.currentTime=0;
+    sounds.miss.play();
+    navigator.vibrate && navigator.vibrate([30,50,30]);
+    if(state.lives<0){
+      gameOver();
+    }
+  }
+
+  function nextRound(){
+    clearTimers();
+    state.round++;
+    // ===== 추가: 라운드 클리어 효과음 & 진동 =====
+    sounds.round.currentTime=0;
+    sounds.round.play();
+    navigator.vibrate && navigator.vibrate(150);
+    beginRound();
+    flash(`라운드 ${state.round-1} 클리어!`);
+  }
+
+  function gameOver(){
+    clearTimers();
+    state.playing=false;
+    const roundsCleared = state.round-1;
+    $resTeam.textContent = state.teamName;
+    $resRounds.textContent = roundsCleared;
+    $resScore.textContent = state.score;
+    // ===== 추가: 게임 오버 효과음 & 진동 =====
+    sounds.over.currentTime=0;
+    sounds.over.play();
+    navigator.vibrate && navigator.vibrate(300);
+    const rec = {team:state.teamName, rounds:roundsCleared, score:state.score, ts:Date.now()};
+    const arr = loadRecords();
+    arr.push(rec);
+    saveRecords(arr);
+    const best = Math.max(0, ...arr.map(r=>r.rounds));
+    $resBest.textContent = best;
+    renderRecords(arr);
+    setScreen('result');
+    flash('기록을 저장했어요.');
+  }
+
+  function clearTimers(){
+    if(state.timers.tick){ clearInterval(state.timers.tick); state.timers.tick=null; }
+    if(state.timers.spawn){ clearInterval(state.timers.spawn); state.timers.spawn=null; }
+    state.upTimeouts.forEach(t=>clearTimeout(t));
+    state.upTimeouts.clear();
+  }
+
+  qs('#btn-pause').addEventListener('click', ()=>{
+    if(!state.playing) return;
+    state.paused = !state.paused;
+    qs('#btn-pause').textContent = state.paused ? '재개' : '일시정지';
+    flash(state.paused? '일시정지' : '재개');
+  });
+
+  qs('#btn-quit').addEventListener('click', ()=>{
+    if(!state.playing) return;
+    gameOver();
+  });
+
+  qs('#btn-retry').addEventListener('click', ()=>{
+    setScreen('setup');
+    if(!state.teamKey) state.teamKey='shinhan';
+    startGame();
+  });
+  qs('#btn-to-setup').addEventListener('click', ()=>{
+    setScreen('setup');
+  });
+
+  function loadRecords(){
+    try{
+      return JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+    }catch(e){ return []; }
+  }
+  function saveRecords(arr){
+    localStorage.setItem(LS_KEY, JSON.stringify(arr));
+  }
+  function renderRecords(arr){
+    if(arr.length===0){
+      $recordsList.innerHTML = `<div class="muted">기록이 없습니다.</div>`;
+      return;
+    }
+    const items = [...arr].sort((a,b)=>b.ts-a.ts).slice(0,50).map(r=>{
+      const d = new Date(r.ts);
+      const date = d.toLocaleString();
+      return `
+        <div class="record-item">
+          <div>
+            <div><strong>${r.team}</strong> · ${r.rounds}R</div>
+            <div class="muted" style="font-size:11px">${date}</div>
+          </div>
+          <div class="pill">점수 ${r.score}</div>
+        </div>
+      `;
+    }).join('');
+    $recordsList.innerHTML = items;
+  }
+  renderRecords(loadRecords());
+
+  qs('#btn-clear').addEventListener('click', ()=>{
+    if(confirm('정말로 모든 기록을 삭제할까요?')){
+      saveRecords([]);
+      renderRecords([]);
+      flash('기록을 삭제했어요.');
+    }
+  });
+
+  qs('#btn-export').addEventListener('click', ()=>{
+    const data = JSON.stringify(loadRecords(), null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'NoMoreTheMore_records.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  let toastTimer=null;
+  function flash(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toast.classList.remove('show'), 1200);
+  }
+
+  ['touchmove','wheel'].forEach(ev=>{
+    document.addEventListener(ev, e=>{
+      if(state.playing && !state.paused) e.preventDefault();
+    }, {passive:false});
+  });
+
+})();
+</script>
