@@ -4,22 +4,21 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>전설의 포메이션 | Legendary Formation</title>
-<meta name="description" content="포메이션·대륙·선수 시대를 고르면 베스트 맞춤 선수를 랜덤 추천해주는 모바일 웹앱" />
+<meta name="description" content="포메이션·대륙·시대를 고르면 포지션별로 어울리는 선수를 랜덤 추천해주는 모바일 웹앱" />
 <style>
   :root{
-    --bg:#000000; /* 완전 블랙 */
-    --card:#121212; 
-    --line:#e6f2e6; 
+    --bg:#000000;
+    --card:#121212;
     --muted:#b6c1b6;
-    --acc:#7fffb4; 
-    --pill:#1c221c; 
-    --btn:#1e5c3a; 
+    --acc:#7fffb4;
+    --pill:#1c221c;
+    --btn:#1e5c3a;
     --btn2:#254a7c;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:#e9f6ea;font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,Arial,sans-serif}
   header{padding:18px 16px 8px}
-  h1{margin:0;font-size:20px;letter-spacing:.2px}
+  h1{margin:0;font-size:20px}
   .sub{color:var(--muted);font-size:12px;margin-top:6px}
 
   .card{background:var(--card);border:1px solid #1f251f;border-radius:14px;padding:12px;margin:12px}
@@ -34,31 +33,24 @@
   .hint{font-size:12px;color:var(--muted);margin-top:8px}
   .pill{display:inline-flex;align-items:center;gap:6px;background:var(--pill);border:1px solid #2a312a;border-radius:999px;padding:6px 10px;font-size:12px;margin:4px 6px 0 0}
 
-  /* Pitch (half) */
+  /* 우리 진영 하프코트 */
   .pitch-wrap{padding:12px}
   .pitch{
     position:relative;width:100%;max-width:560px;margin:0 auto;border:2px solid #dce8dd;border-radius:14px;
     background:
-      linear-gradient(180deg,#1a3d1a 0 14%,#204820 14% 28%,#1a3d1a 28% 42%,#204820 42% 56%,#1a3d1a 56% 70%,#204820 70% 84%,#1a3d1a 84% 100%);
-    aspect-ratio: 10/13; /* 반코트 */
+      linear-gradient(180deg,#142d14 0 12%,#183618 12% 24%,#142d14 24% 36%,#183618 36% 48%,#142d14 48% 60%,#183618 60% 72%,#142d14 72% 84%,#183618 84% 100%);
+    aspect-ratio: 10/13; /* 세로형 반코트 */
     overflow:hidden;
   }
-  /* 라인(반코트) */
-  .pitch:before{
-    content:"";position:absolute;left:0;right:0;bottom:0;top:0;
-    background:
-      radial-gradient(circle at 50% 78%, transparent 42%, rgba(255,255,255,.5) 42.2% 42.8%, transparent 43%),
-      linear-gradient(#fff,#fff) left 50%/100% 2px no-repeat,
-      radial-gradient(circle at 50% 88%, transparent 16%, rgba(255,255,255,.55) 16.6% 17.2%, transparent 17.8%);
-    opacity:.5;pointer-events:none;
-  }
-  .box{position:absolute;left:12%;right:12%;bottom:4%;height:18%;border:2px solid rgba(255,255,255,.7);border-bottom:0;border-radius:10px 10px 0 0}
+  /* 상단(하프라인)은 생략, 우리 페널티지역만 표기 */
+  .penalty{position:absolute;left:12%;right:12%;bottom:4%;height:18%;border:2px solid rgba(255,255,255,.7);border-bottom:0;border-radius:10px 10px 0 0}
   .six{position:absolute;left:32%;right:32%;bottom:4%;height:10%;border:2px solid rgba(255,255,255,.7);border-bottom:0;border-radius:10px 10px 0 0}
-  .goal{position:absolute;left:44%;right:44%;bottom:2%;height:4%;border:2px solid rgba(255,255,255,.8);border-bottom:0;border-radius:4px 4px 0 0;background:rgba(255,255,255,.12)}
+  .goal{position:absolute;left:44%;right:44%;bottom:2%;height:4%;border:2px solid rgba(255,255,255,.9);border-bottom:0;border-radius:4px 4px 0 0;background:rgba(255,255,255,.12)}
 
+  /* 선수 말풍선 */
   .player{
     position:absolute;transform:translate(-50%,-50%);
-    background:rgba(14,19,14,.75);backdrop-filter:saturate(130%) blur(2px);
+    background:rgba(8,12,8,.8);backdrop-filter:saturate(130%) blur(2px);
     border:1px solid rgba(223,255,230,.2);border-radius:12px;padding:6px 8px;min-width:72px;
     text-align:center;font-size:12px;line-height:1.25
   }
@@ -78,7 +70,7 @@
 <body>
 <header>
   <h1>전설의 포메이션</h1>
-  <div class="sub">Legendary Formation — 포메이션·대륙·시대를 고르면, 포지션별로 어울리는 선수를 랜덤 추천해줘요.</div>
+  <div class="sub">상단=FW, 가운데=MF, 하단=DF · 우리 진영만 표시</div>
 </header>
 
 <section class="card">
@@ -114,11 +106,12 @@
     <button class="primary" id="genBtn">추천 생성</button>
     <button class="secondary" id="rerollBtn">재추천(이름만)</button>
   </div>
+  <div class="hint"><span class="pill">상단=FW</span><span class="pill">중단=MF</span><span class="pill">하단=DF+GK</span></div>
 </section>
 
 <section class="pitch-wrap">
   <div class="pitch" id="pitch">
-    <div class="box"></div>
+    <div class="penalty"></div>
     <div class="six"></div>
     <div class="goal"></div>
   </div>
@@ -178,6 +171,8 @@ const DATA = {
     }
   }
 };
+
+/* ---------- 풀 조합 ---------- */
 function getPool(era, continent){
   const erasrc = DATA[era];
   const buckets = ["GK","DF","MF","FW"];
@@ -186,33 +181,50 @@ function getPool(era, continent){
     objs.forEach(o => buckets.forEach(k => out[k].push(...(o?.[k]||[]))));
     return out;
   };
-  if(continent==="global"){
-    return merge(Object.values(erasrc));
-  }
+  if(continent==="global") return merge(Object.values(erasrc));
   return erasrc[continent] ?? merge(Object.values(erasrc));
 }
+
+/* ---------- 포메이션 파싱 (DF-MF-FW + GK 1) ---------- */
 function formationToCounts(fstr){
   const [d,m,f] = fstr.split("-").map(n=>parseInt(n,10));
   return {GK:1, DF:d, MF:m, FW:f};
 }
+
+/* ---------- 좌표 계산 (상단=FW, 중단=MF, 하단=DF, 맨아래=GK) ---------- */
+function rowY(group){
+  // 하프코트 내에서 시각적으로 자연스러운 밴드 고정
+  // 상단(공격) 24~30, 중단(미들) 48~56, 하단(수비) 72~80, GK 94
+  if(group==="FW") return 28;
+  if(group==="MF") return 52;
+  if(group==="DF") return 76;
+  return 94; // GK
+}
+function spreadX(n, pad=16){
+  // 좌우 pad% 여백 두고 균등 분포
+  const xs = [];
+  if(n<=0) return xs;
+  if(n===1){ xs.push(50); return xs; }
+  const start = pad, end = 100-pad;
+  const step = (end-start)/(n-1);
+  for(let i=0;i<n;i++) xs.push(start + step*i);
+  return xs;
+}
 function computePositions(counts){
-  const cols = [
-    {key:"DF", x:28},
-    {key:"MF", x:52},
-    {key:"FW", x:76}
-  ];
   const out = [];
-  out.push({pos:"GK", x:50, y:92});
-  cols.forEach(col=>{
-    const n = counts[col.key];
-    if(n<=0) return;
-    for(let i=0;i<n;i++){
-      const y = 80 - (n===1?0: ( (i/(n-1))*48 - 24 ));
-      out.push({pos:col.key, x:col.x, y});
-    }
+  // GK
+  out.push({pos:"GK", x:50, y:rowY("GK")});
+  // DF/MF/FW 라인: x를 균등 분포, y는 라인 고정
+  ["DF","MF","FW"].forEach(group=>{
+    const n = counts[group];
+    const xs = spreadX(n, 16);
+    const y = rowY(group);
+    xs.forEach(x=> out.push({pos:group, x, y}));
   });
   return out;
 }
+
+/* ---------- 샘플링 ---------- */
 function sampleNoRepeat(arr, n){
   const pool = [...new Set(arr)];
   const out = [];
@@ -233,9 +245,12 @@ function pickSquad(pool, counts){
     FW: sampleNoRepeat(pool.FW, counts.FW)
   };
 }
+
+/* ---------- 렌더 ---------- */
 const elPitch = document.getElementById('pitch');
 const elListWrap = document.getElementById('listWrap');
 const elListGrid = document.getElementById('listGrid');
+
 function renderPitch(coords, squad){
   elPitch.querySelectorAll('.player').forEach(n=>n.remove());
   const add = (x,y,pos,name) => {
@@ -246,7 +261,9 @@ function renderPitch(coords, squad){
     d.innerHTML = `<div class="pos">${pos}</div><div class="name">${name}</div>`;
     elPitch.appendChild(d);
   };
+  // GK
   add(coords[0].x, coords[0].y, 'GK', squad.GK[0] || '—');
+  // 나머지 (DF→MF→FW 순서로 붙여도 좌표는 이미 정렬되어 시각적으로 맞음)
   let iD=0, iM=0, iF=0;
   coords.slice(1).forEach(c=>{
     if(c.pos==='DF') add(c.x,c.y,'DF',squad.DF[iD++]||'—');
@@ -267,6 +284,8 @@ function renderList(squad){
     });
   });
 }
+
+/* ---------- 제어 ---------- */
 const $ = id => document.getElementById(id);
 function generate(){
   const formation = $('formation').value;
@@ -279,8 +298,8 @@ function generate(){
   renderPitch(coords, squad);
   renderList(squad);
 }
-$('genBtn').addEventListener('click', ()=>generate());
-$('rerollBtn').addEventListener('click', ()=>generate());
+$('genBtn').addEventListener('click', generate);
+$('rerollBtn').addEventListener('click', generate);
 generate();
 </script>
 </body>
